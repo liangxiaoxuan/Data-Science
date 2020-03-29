@@ -6,4 +6,6 @@
 * Improving the sales preditive model
 
 
-### * Text similarity comparison
+### * Text Mining
+* Frequency comparison
+* Sentiment comparison 
