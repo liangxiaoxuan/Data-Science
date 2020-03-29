@@ -23,8 +23,8 @@ library(tidyverse)
 library(tibble)
 ```
 
-1.What do you think is the cause for the days with the highest and lowest residual values?  
-Look at all days with abs(resid) > 80.
+1.Factors that cause for the days with the highest and lowest residual values
+(Look at all days with abs(resid) > 80.)
 ```{r}
 
 #Seasons
@@ -54,6 +54,7 @@ daily_res
 Res <- daily_res %>%
   filter(abs(resid) >80)
 Res
+
 #Plot with wday change 
 wday.plot <- Res %>%
   ggplot(aes(term,resid,color=wday))+geom_ref_line(h = 0)+ geom_point()
@@ -61,10 +62,8 @@ wday.plot
 
 
 ```
-
-Answer:
 #From the 'wday.plot',  flights in fall season (Nov-Dec) has the largest amount of residuals which are higher than 80. Also, the residuals are around Nov.28~Dec.01 and Dec.20~31.
-#I would say it probably effected by the day of Thanksgiving and Christmas. 
+#So,I would say it probably effected by the day of Thanksgiving and Christmas. 
 
 
 
@@ -115,9 +114,7 @@ daily %>%
 
 
 ```
-
 #Compared with the wday_term model, the model with every combination of wday and term is better.
-
 
 
 3.Create a new variable that combines the day of week, term (for Saturdays), and public holidays that you identified in number 1. 
@@ -125,7 +122,8 @@ What do the residuals of that model look like?
 
 Do this first as one factor called holiday for all the dates with large absolute value residuals.
 (abs >80)  
-Then do it again with one factor for the high residual dates and another for the low residual dates.  Which model works better?  
+Then do it again with one factor for the high residual dates and another for the low residual dates.  
+Which model works better?  
 ```{r}
 #Holidays identified in No.1
 #Holidays
@@ -212,9 +210,6 @@ daily %>%
 
 
 ```
-
-
-
 
 4.Create a variable that contains the day of the week unless it is one of the two types you identified in the second part of number 3.  Produce a model that models n based on both that variable and the term as well as their interaction.  Plot the residuals.  
 ```{r}
