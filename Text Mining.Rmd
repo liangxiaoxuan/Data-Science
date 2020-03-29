@@ -1,0 +1,294 @@
+---
+title: "Text comparison"
+author: "Xiaoxuan Liang"
+date: "4/5/2019"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(tidytext)
+library(janeaustenr)
+library(stringr)
+library(gutenbergr)
+library(dplyr)
+library(scales)
+```
+
+1.Pick three authors from Gutenberg.org and download their works.  
+Compare the authors.  
+Which two are more alike?  Some suggestions: Mark Twain, Leo Tolstoy, Charles Dickens. 
+```{r}
+#Three authors: Mark Twain, Leo Tolstoy, Charles Dickens
+Mark <- c("Adventures of Huckleberry Finn","A Connecticut Yankee in King Arthur's Court")
+Leo <- c("War and Peace","Anna Karenina")
+Charles <- c("A Tale of Two Cities","Great Expectations")
+Book_num <- function(book){
+  ID <- vector("double",length(book))
+  for(i in 1:length(book)){
+    ID[i] <- gutenberg_works(title == book[i])
+  }
+  ID }
+Book_num(Mark)
+Book_num(Leo)
+Book_num(Charles)
+
+#Downloads
+MarkD <- gutenberg_download(c(76,86))
+LeoD <- gutenberg_download(c(2600,1399))
+CharlesD <- gutenberg_download(c(98,1400))
+```
+
+```{r}
+#Tidy
+Tidy <- function(df){
+  T_author <- df %>%
+    unnest_tokens(word,text) %>%
+    mutate(word= str_extract(word,"[a-z']+")) %>%
+    anti_join(stop_words)
+}
+TMark <- Tidy(MarkD)
+TLeo <- Tidy(LeoD)
+TCharles <- Tidy(CharlesD)
+
+```
+
+```{r}
+#Put all three authors together
+frequency_authors <- bind_rows(mutate(TMark,author = "Mark"),
+                              mutate(TLeo,author = "leo"),
+                              mutate(TCharles,author = "Charles"))%>%
+                      mutate(word = str_extract(word,"[a-z']+"))%>%
+                      count(author,word)%>%
+                      group_by(author)%>%
+                      mutate(proportion = n/ sum(n))%>%
+                      select(-n)%>%
+                      spread(author,proportion)
+
+ frequency_authors                         
+```
+
+```{r}
+ #Frequencies
+frequency1 <- frequency_authors %>%
+   gather(author,proportion,`Mark`:`leo`)
+
+frequency2 <- frequency_authors %>%
+   gather(author,proportion,`leo`:`Charles`)
+
+frequency1
+frequency2
+```
+
+```{r}
+#Grap the frequency comparison
+#Charle vs LEO & Mark
+ggplot(frequency1, aes(x = proportion,
+        y = `Charles`,color = abs(`Charles` - proportion)))+
+  geom_abline(color = "gray40", lty =2)+
+  geom_jitter(alpha = 0.1,size= 2.5,
+              width = 0.3,height = 0.3)+
+  geom_text(aes(label= word),
+            check_overlap = TRUE,vjust = 1.5)+
+  scale_x_log10(labels = percent_format()) +
+  scale_y_log10(labels = percent_format()) +
+  scale_color_gradient(limits = c(0, 0.001),
+                        low = "darkslategray4",
+                        high = "gray75") +
+  facet_wrap(~author, ncol = 2) +
+  theme(legend.position="none") +
+  labs(y = "Charles", x = NULL)
+
+#Mark vs Charls & Leo
+ggplot(frequency2, aes(x = proportion,
+        y = `Mark`,color = abs(`Mark` - proportion)))+
+  geom_abline(color = "gray40", lty =2)+
+  geom_jitter(alpha = 0.1,size= 2.5,
+              width = 0.3,height = 0.3)+
+  geom_text(aes(label= word),
+            check_overlap = TRUE,vjust = 1.5)+
+  scale_x_log10(labels = percent_format()) +
+  scale_y_log10(labels = percent_format()) +
+  scale_color_gradient(limits = c(0, 0.001),
+                        low = "darkslategray4",
+                        high = "gray75") +
+  facet_wrap(~author, ncol = 2) +
+  theme(legend.position="none") +
+  labs(y = "Mark", x = NULL)
+
+
+
+```
+
+```{r}
+#Correlation1
+df_Leo <- frequency1[frequency1$author == "leo",]
+df_Mark <- frequency1[frequency1$author == "Mark",]
+cor.test(data = df_Leo, ~ proportion + `Charles`)
+cor.test(data = df_Mark, ~ proportion + `Charles`)
+
+##Correlation1
+df_Charles <- frequency2[frequency2$author == "Charles",]
+df_leo <- frequency2[frequency2$author == "leo",]
+cor.test(data = df_Charles, ~ proportion + `Mark`)
+cor.test(data = df_leo, ~ proportion + `Mark`)
+
+```
+#From the grap and correlation table, Leo Tolstoy and Charles Dickens are more alike.
+
+
+
+
+
+2.Let’s look at how the sentiment changes across the length of a book by looking at 80 lines at a time.  
+Compare how sentiment changes in Victor Hugo’s Les Miserables and Charles Dickens’ A Tale of Two Cities.Look at negative vs positive sentiment.  
+Then pick a sentiment like joy or anger or fear or …  and see how that sentiment compares.
+{r}
+victor <- gutenberg_download(c(135))
+charles <- gutenberg_download(c(98))
+
+
+tidy_victor <- victor %>% 
+  mutate(volume= cumsum(str_detect(text, regex("^VOLUME (I|II|III|IV|V)")))) %>%
+  mutate(volume= case_when(volume>0 ~ volume-1, volume==0 ~ 0)) %>%
+  group_by(volume) %>%
+  mutate(book= cumsum(str_detect(text, regex("^BOOK (First|Second|Third|Fourth|Fifth|Sixth|Seventh|Eight|Ninth|Tenth|Eleventh|Twelfth|Thirteenth|Fourteenth|Fifteenth)", ignore_case = TRUE)))) %>%
+  group_by(volume, book) %>%
+  mutate(linenumber = row_number(),chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]", ignore_case = TRUE)))) %>%
+  ungroup() %>% 
+  unnest_tokens(word, text) %>%
+  select(volume, book, chapter, everything(),-gutenberg_id)
+
+
+
+victor_sentiment <- tidy_victor %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(volume, book, index = linenumber %/% 80, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+  
+
+
+# the sentiment analysis for all books in Volume 1 of Victor Hugo's Les Miserables
+{r}
+
+victor_sentiment %>% 
+  filter(book!=0) %>%
+  filter(volume == 1) %>%
+  ggplot(aes(index, sentiment, fill= as.character(book))) +
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~book, ncol = 2, scales = "free_x")
+
+#Volume 1 has 8 books. we can also look at volume 2.  
+
+
+# have a look at positive vs negative sentiments for Victor:  
+{r}
+victor_counts <- tidy_victor %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+victor_counts %>% 
+  group_by(sentiment) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment (Victor)",
+       x = NULL) +
+  coord_flip()
+
+
+
+{r}
+tidy_charles <- charles %>% 
+  mutate(book = cumsum(str_detect(text, regex("^Book the (First|Second|Third)", ignore_case = TRUE)))) %>%
+  group_by(book) %>%
+  mutate(linenumber = row_number(), chapter = cumsum(str_detect(text, regex("^(I|II|III|IV|V|VI|VII|VIII|IX|X|XI|XII|XIII|XIV|XV)\\.", ignore_case = TRUE)))) %>%
+  ungroup() %>% 
+  unnest_tokens(word, text) %>%
+  select(book, chapter, everything(),-gutenberg_id) 
+ 
+
+
+charles_sentiment <- tidy_charles %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(book, index = linenumber %/% 80, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+  
+
+
+
+# the sentiment analysis for all books of Charles Dickensan's A Tale of Two Cities  
+
+{r}
+charles_sentiment %>%
+  filter(book!=0) %>%
+  ggplot(aes(index, sentiment, fill=as.character(book))) +
+  geom_col(show.legend = FALSE) + 
+  facet_wrap(~book, ncol = 2, scales = "free_x")
+  
+# more negative sentiments found in book 3  
+
+
+#look at positive vs negative sentiments for Victor:  
+
+{r}
+charles_counts <- tidy_charles %>% 
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+charles_counts %>% 
+  filter(word != "miss") %>% # Removed miss because it's mostly not a negative word
+  group_by(sentiment) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment (Charles)",
+       x = NULL) +
+  coord_flip()
+
+  
+
+
+
+{r}
+nrcJoy <- get_sentiments("nrc") %>%
+  filter(sentiment == "joy")
+
+
+victorJoy <- tidy_victor %>%
+  inner_join(nrcJoy) %>% 
+  group_by(volume, book, chapter) %>%
+  count()
+
+victorJoy %>%
+  filter(volume==1) %>% #####Only Looking at the books in first volume
+  ggplot(aes(chapter, n)) +
+  geom_line()+
+  facet_wrap(~book, scales = "free_x")
+
+
+charlesJoy <- tidy_charles %>% 
+  inner_join(nrcJoy) %>% 
+  group_by(book, chapter) %>%
+  count()
+
+charlesJoy %>% 
+  filter(book!=0) %>% 
+  ggplot(aes(chapter, n)) +
+  geom_line()+
+  facet_wrap(~book, scales = "free_x")
