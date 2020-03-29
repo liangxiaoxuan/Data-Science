@@ -1,1 +1,350 @@
+---
+title: "Weather Anlysis"
+author: "Xiaoxuan Liang"
+date: "3/24/2019"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(magrittr)
+library(purrr)
+library(modelr)
+library(lubridate)
+library(ggplot2)
+library(datasets)
+library(nycflights13)
+library(tidyverse)
+library(tibble)
+```
+
+1.What do you think is the cause for the days with the highest and lowest residual values?  
+Look at all days with abs(resid) > 80.
+```{r}
+
+#Seasons
+term <- function(date) {
+  cut(date, 
+    breaks = ymd(20130101, 20130301, 20130605, 20130825, 20140101),
+    labels = c("winter","spring", "summer", "fall") 
+  )
+}
+
+#Dataset 
+daily <- flights %>%
+  mutate(date = make_date(year, month, day)) %>%
+  count(date) %>%
+  mutate(wday = wday(date, label = TRUE)) %>% 
+  mutate(term = term(date))
+daily
+
+#Model
+mod1 <- lm(n ~ wday * term, data = daily)
+#Residuals
+daily_res <- daily %>% 
+  add_residuals(mod1, "resid")
+daily_res
+
+#Residulas abs > 80
+Res <- daily_res %>%
+  filter(abs(resid) >80)
+Res
+#Plot with wday change 
+wday.plot <- Res %>%
+  ggplot(aes(term,resid,color=wday))+geom_ref_line(h = 0)+ geom_point()
+wday.plot
+
+
+```
+
+Answer:
+#From the 'wday.plot',  flights in fall season (Nov-Dec) has the largest amount of residuals which are higher than 80. Also, the residuals are around Nov.28~Dec.01 and Dec.20~31.
+#I would say it probably effected by the day of Thanksgiving and Christmas. 
+
+
+
+2.Create a new variable that splits the wday variable into terms (seasons), but only for Saturdays, i.e. it should have Thurs, Fri, but Sat-winter, Sat-summer, Sat-spring, Sat-fall.  Use cutoff dates of March 1, June 5, Aug 25 to separate into seasons. How does this model compare with the model with every combination of wday and term? Plot both model residuals side by side.
+```{r}
+
+#Creat the new varibale(wday with Sat-term)
+daily <- daily %>%
+   mutate(wday2 = wday(date, label = TRUE))
+   daily$wday2 = as.character((daily$wday))
+   for (i in 1:length(daily$wday2)){
+    if (daily$wday2[i] == 'Sat'){
+       daily$wday2[i] =paste(daily$wday2[i],daily$term[i],sep = "-")
+     } }
+daily
+
+#New model
+mod2 <- lm(n ~ wday2,data = daily)
+mod1 <- lm(n ~ wday * term, data = daily)
+
+#residuals
+daily <- daily %>%
+  add_residuals(mod1, var = "residual_1")%>%
+  add_residuals(mod2, var = "residual_2")
+daily
+
+#Plot both model residuals 
+#mod1 resid plot
+daily %>%
+  ggplot(aes(date,y = residual_1))+
+  geom_hline(yintercept = 0,size =2,colour = "white")+
+  geom_line()
+
+#mod2 resid plot
+daily %>%
+  ggplot(aes(date,y = residual_2))+
+  geom_hline(yintercept = 0,size =2,colour = "white")+
+  geom_line()
+
+#compared mod1 and mod2 
+daily %>%
+  ggplot(aes(date,residual_1))+
+  geom_point()
+
+daily %>%
+  ggplot(aes(date,residual_2))+
+  geom_point()
+
+
+```
+
+#Compared with the wday_term model, the model with every combination of wday and term is better.
+
+
+
+3.Create a new variable that combines the day of week, term (for Saturdays), and public holidays that you identified in number 1. 
+What do the residuals of that model look like?  
+
+Do this first as one factor called holiday for all the dates with large absolute value residuals.
+(abs >80)  
+Then do it again with one factor for the high residual dates and another for the low residual dates.  Which model works better?  
+```{r}
+#Holidays identified in No.1
+#Holidays
+holidays <- tribble(
+  ~holiday,~date,
+  "Thanksgiving", 20131127,
+  "Thanksgiving", 20131128,
+  "Thanksgiving", 20131129,
+  "Christmas", 20131224,
+  "Christmas",20131225,
+  "Christmas",20131226,
+  "memorial day", 20130527,
+  "independence day", 20130704,
+  "labor day", 20130902,
+   "new year", 20130101
+) %>%
+  mutate(date=ymd(date))
+holidays
+
+#Creat a new varibale
+daily <- daily %>%
+  mutate(wday3 = case_when (date %in% holidays$date ~ "holiday",
+                            .$wday == "Sat" & .$term == "winter" ~ "Sat-winter",
+                            .$wday == "Sat" & .$term == "summer" ~ "Sat-summer",
+                            .$wday == "Sat" & .$term == "fall" ~ "Sat-fall",
+                            .$wday == "Sat" & .$term == "spring" ~ "Sat-spring",
+                            TRUE~ as.character(.$wday)))
+daily
+
+#mod3
+mod3 <- lm(n~wday3,data = daily)
+#mod3 plot residuals
+daily <- daily %>%
+  add_residuals(mod3, var = "residual_3")
+daily %>%
+  ggplot(aes(date,y = residual_3))+
+  geom_hline(yintercept = 0,size =2,colour = "white")+
+  geom_line()
+
+
+#Holidays in absolute large residuals
+#first step
+daily <- daily %>%
+  mutate(wday4 = case_when (date %in% Res$date & date %in% holidays$date  ~ "holiday",
+                            .$wday == "Sat" & .$term == "winter" ~ "Sat-winter",
+                            .$wday == "Sat" & .$term == "summer" ~ "Sat-summer",
+                            .$wday == "Sat" & .$term == "fall" ~ "Sat-fall",
+                            .$wday == "Sat" & .$term == "spring" ~ "Sat-spring",
+                             TRUE~ as.character(.$wday)
+                             ))
+#second step
+for (i in 1:length(daily$wday4)){
+  if(daily$wday4[i] == "holiday" & daily$residual_1[i] > 0){
+    daily$wday4[i] = paste("holiday-high")
+    }else if(daily$wday4[i] == "holiday" & daily$residual_1[i] < 0){
+      daily$wday4[i] =paste("holiday-low")
+    }else{
+      daily$wday4[i]
+    }
+}
+daily
+
+
+#mod4
+mod4 <- lm(n~wday4,data = daily)
+#mod3 plot residuals
+daily <- daily %>%
+  add_residuals(mod4, var = "residual_4")
+daily %>%
+  ggplot(aes(date,y = residual_4))+
+  geom_hline(yintercept = 0,size =2,colour = "white")+
+  geom_line()
+
+
+
+#compare mod3 & mod4
+daily %>%
+  ggplot(aes(date,residual_3))+
+  geom_point()
+
+daily %>%
+  ggplot(aes(date,residual_4))+
+  geom_point()
+
+
+```
+
+
+
+
+4.Create a variable that contains the day of the week unless it is one of the two types you identified in the second part of number 3.  Produce a model that models n based on both that variable and the term as well as their interaction.  Plot the residuals.  
+```{r}
+#create a new variable
+daily$wday5 = daily$wday4
+for (i in 1:length(daily$wday5)){
+  if(daily$wday5[i] == "Sat-winter" | 
+     daily$wday5[i] == "Sat-summer" | 
+     daily$wday5[i] == "Sat-fall" | 
+     daily$wday5[i] =="Sat-spring"){
+    daily$wday5[i] = paste("Sat")
+  }
+}
+daily
+
+#mod5
+mod5 <- lm(n~ wday5*term, data = daily)
+
+#mod5 plot residuals
+daily <- daily %>%
+  add_residuals(mod5, var = "residual_5")
+
+daily %>%
+  ggplot(aes(date,y = residual_5))+
+  geom_hline(yintercept = 0,size =2,colour = "white")+
+  geom_line()
+
+daily %>%
+  ggplot(aes(date,residual_5))+
+  geom_point()
+
+```
+
+
+5.Use what you have learned above to predict the number of flights for 2019 per day(n).  
+Print a graph that overlays the number of flights in 2013 with your number of predicted flights in 2019. 
+How many flights do you predict for each day June 20 - July 10 of 2019?
+```{r}
+
+#Compared 
+daily %>%
+  ggplot(aes(date,residual_1))+
+  geom_point()
+
+daily %>%
+  ggplot(aes(date,residual_2))+
+  geom_point()
+
+daily %>%
+  ggplot(aes(date,residual_3))+
+  geom_point()
+
+daily %>%
+  ggplot(aes(date,residual_4))+
+  geom_point()
+
+daily %>%
+  ggplot(aes(date,residual_5))+
+  geom_point()
+
+```
+#From the comparison, the large outliners have gone from mod5 
+#So,we're using mod5 to predict 2019 
+
+
+```{r}
+
+#2019 data
+daily19 <- tibble(date=seq(ymd("2019-01-01"),
+                           ymd("2019-12-31"),
+                           by = "days"))
+
+term19 <- function(date) {
+ cut(date,
+ breaks = ymd(20190101, 20190301, 20190605, 20190825, 20200101),
+ labels = c("winter","spring", "summer", "fall")
+ )
+}
+
+daily19 <- daily19 %>%
+ mutate(wday = wday(date, label = TRUE)) %>%
+ mutate(term = term19(date))
+
+
+#holidays
+holidays2 <- tribble(
+  ~holiday,~date,
+  "Thanksgiving", 20191127,
+  "Thanksgiving", 20191128,
+  "Thanksgiving", 20191129,
+  "Christmas", 20191224,
+  "Christmas",20191225,
+  "Christmas",20191226,
+  "memorial day", 20190527,
+  "independence day", 20190704,
+  "labor day", 20190902,
+   "new year", 20190101
+) %>%
+  mutate(date=ymd(date))
+holidays2
+
+#create a new variable
+daily19 <- daily19 %>%
+  mutate(wday5 = case_when (date %in% holidays2$date ~ "holiday-low",
+                            TRUE~ as.character(.$wday)))        
+         
+#2019prediction n 
+daily19 <- daily19 %>%
+  add_predictions(mod5,"prediction")
+
+
+#How many flights do you predict for each day June 20 - July 10 of 2019
+print(daily19[171:191,])
+
+
+#Print a graph that overlays the number of flights in 2013 with your number of predicted flights in 2019.
+grid19 <- daily19 %>%
+  add_predictions(mod5,"n")
+
+#Overlays graphs
+ggplot(daily,aes(wday,n))+
+  geom_boxplot()+
+  geom_point(data = grid19,colour="red")+
+  facet_wrap(~term)
+
+
+
+
+
+```
+
+
 
