@@ -22,7 +22,8 @@ library(scales)
 
 1.Pick three authors from Gutenberg.org and download their works.  
 Compare the authors.  
-Which two are more alike?  Some suggestions: Mark Twain, Leo Tolstoy, Charles Dickens. 
+
+Which two are more alike? 
 ```{r}
 #Three authors: Mark Twain, Leo Tolstoy, Charles Dickens
 Mark <- c("Adventures of Huckleberry Finn","A Connecticut Yankee in King Arthur's Court")
@@ -144,7 +145,6 @@ cor.test(data = df_leo, ~ proportion + `Mark`)
 
 
 
-
 2.Let’s look at how the sentiment changes across the length of a book by looking at 80 lines at a time.  
 Compare how sentiment changes in Victor Hugo’s Les Miserables and Charles Dickens’ A Tale of Two Cities.Look at negative vs positive sentiment.  
 Then pick a sentiment like joy or anger or fear or …  and see how that sentiment compares.
@@ -225,8 +225,6 @@ charles_sentiment <- tidy_charles %>%
   spread(sentiment, n, fill = 0) %>%
   mutate(sentiment = positive - negative)
   
-
-
 
 # the sentiment analysis for all books of Charles Dickensan's A Tale of Two Cities  
 
