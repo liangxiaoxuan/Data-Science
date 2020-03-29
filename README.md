@@ -1,5 +1,5 @@
 ## Data Science
 
-### Weather Prediction
+### * Weather Prediction
 
-### Text similarity comparison
+### * Text similarity comparison
